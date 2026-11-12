@@ -1,0 +1,3 @@
+deltachat-rpc-client==2.69.0
+deltachat-rpc-server==2.69.0
+libsql-experimental==0.0.55
