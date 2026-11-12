@@ -368,11 +368,47 @@ public class MainActivity extends Activity {
                     JSONObject pub = r.optJSONObject("published");
                     JSONObject skip = r.optJSONObject("skipped");
                     JSONObject errs = r.optJSONObject("errors");
+                    JSONObject part = r.optJSONObject("partial");
                     int nPub = pub == null ? 0 : pub.length();
                     int nSkip = skip == null ? 0 : skip.length();
+                    int nAdopt = 0, nHist = 0;
+                    if (pub != null) {
+                        java.util.Iterator<String> ait = pub.keys();
+                        while (ait.hasNext()) {
+                            JSONObject ao = pub.optJSONObject(ait.next());
+                            if (ao != null && ao.optBoolean("adopted", false)) nAdopt++;
+                            if (ao != null && ao.optBoolean("ingest_pending", false)) nHist++;
+                        }
+                    }
+                    int nPart = part == null ? 0 : part.length();
                     StringBuilder msg = new StringBuilder();
-                    msg.append("Published to ").append(nPub).append(" chat(s).");
+                    if (nPart > 0) {
+                        // Delivered vs fully-ready counts stay DISTINCT: a
+                        // partial run DID deliver the bubble.
+                        msg.append("Delivered to ").append(nPub + nPart)
+                           .append(" chat(s); fully ready in ").append(nPub).append(".");
+                    } else {
+                        msg.append("Published to ").append(nPub).append(" chat(s).");
+                    }
                     if (nSkip > 0) msg.append(" Already had this exact file: ").append(nSkip).append(".");
+                    if (nAdopt > 0) msg.append(" Recovered the already-delivered app bubble without sending a duplicate: ").append(nAdopt).append(".");
+                    if (nHist > 0) msg.append(" Earlier history recovery is pending in ").append(nHist).append(" chats.");
+                    if (part != null && part.length() > 0) {
+                        // Third state: the app WAS delivered (bubble sent +
+                        // registered) but the history replay failed. Retrying
+                        // the SAME file completes the replay into the existing
+                        // instance - no duplicate bubble.
+                        msg.append("\n\nDelivered but history replay failed in ")
+                           .append(part.length())
+                           .append(" chat(s); retry the SAME file to finish:");
+                        java.util.Iterator<String> pit = part.keys();
+                        while (pit.hasNext()) {
+                            String pk = pit.next();
+                            JSONObject po = part.optJSONObject(pk);
+                            msg.append("\nchat ").append(pk).append(": ")
+                               .append(po == null ? "" : po.optString("error"));
+                        }
+                    }
                     if (errs != null && errs.length() > 0) {
                         msg.append("\n\nErrors:");
                         java.util.Iterator<String> it = errs.keys();

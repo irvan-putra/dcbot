@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <application android:label="SCRATCH bot 0.3 r12" android:icon="@mipmap/ic_launcher" android:extractNativeLibs="true" android:allowBackup="false">
+    <application android:label="SCRATCH bot 0.4 r13" android:icon="@mipmap/ic_launcher" android:extractNativeLibs="true" android:allowBackup="false">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
