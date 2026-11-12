@@ -6,8 +6,8 @@ android {
         applicationId 'com.instinct.bottest.scratch'
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName 'scratch-0.1'
+        versionCode 8
+        versionName 'scratch-0.3'
         ndk { abiFilters 'arm64-v8a' }
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
@@ -15,6 +15,21 @@ android {
 }
 chaquopy {
     defaultConfig {
-        pip { install 'deltachat-rpc-client==2.69.0' }
+        pip { install 'deltachat-rpc-client==2.69.0'
+            install 'cryptography' }
     }
+}
+
+// Optional local-only render test (never shipped in the APK):
+// app/src/test/.../MainActivityRenderTest.java renders the initial UI with
+// Robolectric NATIVE graphics at sdk=32. To run locally add:
+//   testImplementation 'org.robolectric:robolectric:4.13'
+// and run the unit test task; onCreate starts no Python/core/network.
+
+
+
+dependencies {
+    // Local-only JVM tests (Robolectric); never shipped in the APK.
+    testImplementation 'org.robolectric:robolectric:4.13'
+    testImplementation 'junit:junit:4.13.2'
 }

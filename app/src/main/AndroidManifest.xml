@@ -1,9 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <application android:label="SCRATCH bot validation" android:extractNativeLibs="true">
+    <application android:label="SCRATCH bot 0.3 r12" android:icon="@mipmap/ic_launcher" android:extractNativeLibs="true" android:allowBackup="false">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -12,7 +14,12 @@
         </activity>
         <service android:name=".BotService" android:foregroundServiceType="specialUse" android:exported="false">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Offline packaging validation of an embedded Python runtime and bundled executable; local checks only, no background sync in this build." />
+                android:value="Personal DeltaChat delivery bot: keeps a foreground IMAP connection to a chatmail relay to deliver webxdc app updates to chats the owner granted. Started only by explicit user tap; no third-party data collection." />
         </service>
+        <receiver android:name=".BootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

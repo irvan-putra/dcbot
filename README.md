@@ -1,63 +1,70 @@
-# intodo bot validation (scratch 0.1)
+# intodo bot validation (scratch 0.3, r12)
 
-One-off Android test app that checks whether the phone-side bridge bot runtime for
-[itdxdc](https://github.com/irvan-putra/intodo) (webxdc ops) works on a real phone,
-before anything is integrated into itdapk (the Android app in the same repo).
+scratch 0.3 keeps the 0.2 OFFLINE probe and adds a LIVE mode: the v6.1
+delivery bot running on-device as a foreground service with its own dedicated
+chatmail account. Trust model: Delta Chat's contact/invitation flow IS the
+boundary - whoever holds the bot's invitation QR can reach it. Any accepted
+chat is served with its own isolated list: a group gets a shared list, a
+direct chat gets a personal list. There is no owner identity and no
+chat-side management; all management and publishing is app-side. The
+background model follows the official DeltaChat-Android F-Droid flavor: no
+Google push, no third-party servers beyond the chatmail relay.
 
-This is a validation build, not the bot. It runs entirely offline:
+Buttons (each an explicit tap; nothing runs by itself):
+1. Offline validation probe - identical to 0.2, no network.
+2. Create bot account - one-time, network: provisions ONE dedicated profile
+   on the public chatmail relay via its dcaccount invite. The bot's OWN
+   identity, never the user's personal account; the address is shown in the
+   app.
+3. Start/stop the bot service - permanent-notification foreground service
+   (specialUse type, START_STICKY). Stop writes a STOP flag; the python
+   watchdog closes the RPC and exits (real stop, single-run lock).
+4. Show the invitation QR - SecureJoin setup-contact QR (SVG + text) of the
+   RUNNING account, generated on demand by the live loop (INVITE_REQ /
+   INVITE_DONE file IPC). The QR text is a bearer invitation: it is never
+   logged.
+5. Export bot for itdapk - pauses the live bot and writes ONE encrypted
+   .dcmig bundle (account backup + bot state) protected by a one-time
+   transfer code; see integration/MIGRATION.md.
+6. Publish new app version - pick a .xdc; the app stores it under an
+   immutable content-addressed name and queues an atomic request
+   (PUBLISH_REQ: basename + per-request token). The live loop fans it out
+   to every served chat with the v6.1 headline flow (per-chat packed list
+   identity, bot-origin registration, full canonical history replay),
+   writes a per-chat checkpoint (PUBLISH_PROG) and finally the correlated
+   result (PUBLISH_DONE). The UI matches the result to its request by
+   token + sha256 and reattaches across activity recreation. A chat that
+   misses a publish (added later, revoked at the time, relay failure) is
+   healed lazily on its next traffic: the runtime remembers the current
+   published version and re-delivers into that chat only - never deleting
+   old instances, never downgrading a newer one.
 
-- starts the bundled DeltaChat core (deltachat-rpc-server, official chatmail/core 2.69.0
-  Android arm64 binary) from the app's native library directory,
-- saves and reads back one record in a local SQLite database (stdlib sqlite3 through
-  the same OpsStore the bridge bot uses),
-- starts and stops an Android foreground service (`specialUse` type),
-- writes each result to an on-screen log ending in VALIDATION PASS or FAIL.
+Trust and isolation:
+- Contact requests stay refused (core's own boundary).
+- Removal: when the core records the bot removed from a chat, access
+  pauses; the list id, registrations and store file are kept, and re-adding
+  resumes the same list (core chat ids are stable across remove/re-add).
+  A revoked chat resumes only on grounded rejoin evidence - a late
+  in-flight message alone never revokes the pause.
+- Each served chat gets its OWN OpsStore (ops-<id>.db), its OWN stable
+  list id and its OWN v6.1 gate/bridge; histories never mix across chats.
+- No chat-originated input can publish or administer: the per-chat gates
+  are built with no owner address, so their DM command surface refuses
+  everyone by construction.
+- Network: IMAP/SMTP to the chatmail relay only. No Firebase, no microG.
 
-It creates no account, connects to no network, and writes nothing outside its own app
-folder. Uninstalling removes everything. Package identity is a throwaway
-`com.instinct.bottest.scratch`, debug-signed, arm64-v8a only.
+Build (host: JDK 17, Android SDK 34, gradle 8.9):
+    gradle :app:assembleRelease
+The APK is arm64-v8a only (the bundled Delta Chat core lib exists for no
+other ABI). Native libs ship compressed (legacy packaging,
+extractNativeLibs=true); zipalign before signing.
 
-Status: built and statically inspected on desktop (APK contents, manifest, ELF
-linkage). It has NOT run on a phone yet; installing it is the first real test, and the
-load-bearing unknown is whether Android's SELinux policy allows executing the bundled
-binary from the native library directory on the target device.
-
-## Build
-
-Needs JDK 17, Android SDK platform 34 + build-tools 34.0.0, and Gradle 8.9
-(`sdk.dir` in a gitignored `local.properties`). No wrapper is checked in.
-
-The bundled core binary is NOT in this repo (vendor binary, 21 MB). Fetch the official
-artifact and place it at `app/src/main/jniLibs/arm64-v8a/librpcsrv.so`:
-
-- wheel: https://pypi.org/project/deltachat-rpc-server/2.69.0/
-  (`deltachat_rpc_server-2.69.0-py3-none-android_21_arm64_v8a.whl`,
-  binary inside at `deltachat_rpc_server/deltachat-rpc-server`)
-- or the release asset `deltachat-rpc-server-arm64-v8a-android` from
-  https://github.com/chatmail/core/releases/tag/v2.69.0
-
-Expected sha256 of `librpcsrv.so`:
-`101c7c59675f295efa601eba0e4bcf01fa2456e44b8aa9ed2fa999c6fb995257`
-
-Then: `gradle assembleDebug` -> `app/build/outputs/apk/debug/app-debug.apk`.
-
-## Layout
-
-- `app/src/main/java/.../MainActivity.java` - two buttons (start/stop service) and a log view.
-- `app/src/main/java/.../BotService.java` - specialUse foreground service, starts Python (Chaquopy) and runs the validation.
-- `app/src/main/python/bot_validation.py` - the offline checks.
-- `app/src/main/python/ops_store.py` - the storage adapter under test (stdlib sqlite3 path).
-- `app/build.gradle` - AGP 8.5.2 + Chaquopy 17.2.0; `useLegacyPackaging` +
-  `android:extractNativeLibs="true"` so the installer extracts the bundled binary as a real file.
-
-## Known limits
-
-- Android 10+ blocks `exec()` from the app data directory; the documented route used
-  here is executing a `lib*.so` file extracted from the APK's native library directory
-  (Chaquopy issue #605 tracks official support; chaquopy-ffmpeg ships executables this way).
-  This must be proven on-device before any integration claim.
-- Foreground service behavior under Samsung One UI battery policies is untested; this
-  build does not request battery-optimization exemption and does not restart on boot.
-- Fallbacks if exec is blocked: JNI bindings (chatmail/core has no published Maven
-  artifact, issue #7286) or a targetSdk 28 build (not built; would need an explicit
-  decision after risk explanation).
+Local JVM tests (Robolectric, no device, no network/core):
+    gradle -Pandroid.useAndroidX=true :app:testDebugUnitTest
+Covers the publish IPC contract (immutable file, atomic request, DONE
+dedup, pending REQ/PROG refusal, recreation reattach) and a native-graphics
+render of the initial UI. The python wrapper suite
+(app/src/main/python/test_bot_runtime.py) runs the trust/isolation model
+against the shipped modules; test_scan_e2e.py (repo root in the task
+workspace, not shipped) drives the same membership scenarios against a real
+deltachat-rpc-server 2.69.0.
