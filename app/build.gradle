@@ -1,0 +1,20 @@
+plugins { id 'com.android.application'; id 'com.chaquo.python' }
+android {
+    namespace 'com.instinct.bottest.scratch'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.instinct.bottest.scratch'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName 'scratch-0.1'
+        ndk { abiFilters 'arm64-v8a' }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    packagingOptions { jniLibs { useLegacyPackaging = true } }
+}
+chaquopy {
+    defaultConfig {
+        pip { install 'deltachat-rpc-client==2.69.0' }
+    }
+}
